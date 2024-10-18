@@ -1,0 +1,212 @@
+---
+title: "paired_filter"
+author: "Afrooz Razi"
+date: "2024-04-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning=FALSE,error=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/ASE/")
+```
+
+```{r, warning=FALSE,message = FALSE, error=FALSE, echo=FALSE}
+source("scr/MA_plot.R")
+library(tidyverse)
+library(ggplot2)
+library(ggridges)
+library(data.table)
+library(tinytex)
+library(cowplot)
+set.seed(12345)
+
+make_plot<-function(data_samp){
+  for(k in 1:nrow(data_samp)){
+  sample_id<-data_samp$external_id[k]
+  study<-data_samp$study[k]
+  uni_norm<-round(data_samp$uni_norm[k],3)
+  #overlap<-data_samp$overlap[k]
+  n_het<-data_samp$nHet[k]
+  print(k)
+
+  xx<-make_MA(sample_id,study,uni_norm,test_line)
+
+  p1<-plot_MA(xx$ase_df, sample_id,study,uni_norm,xx$test_line_sample,xx$q_line)
+  p1<-p1+#annotate("text", x = 4, y = 0.8, label = paste0("fragment overlap=",overlap) )+
+    annotate("text", x = 4, y = 0.7, label = paste0("nHet=",n_het) )
+  print(p1)
+
+}
+dev.off()
+}
+```
+
+# Load the data
+
+```{r}
+
+paired<-readRDS("data/paired.rds")
+battle<-read_tsv("data/battle.tsv")
+test_line<-readRDS("data/geuvadis_quantile.rds")
+cancer<-readRDS("data/cancer_annot.rds")
+potential_single_cell<-readRDS("data/potential_single_cell.rds")
+
+paired$frag_mode<-paired$bc_frag.mode_length
+paired$overlap<- paired$bc_frag.mode_length-(paired$avg_len*2)
+
+seq_mean=seq(0,4.6,by=0.1)
+```
+
+
+# Starting numbers
+
+```{r}
+#Total number of paired-end samples:
+nrow(paired)
+
+```
+
+
+# Filter #1:
+## Filter based on single cell
+
+```{r}
+# number of samples removed in this step
+scRNA<-which(paired$external_id %in% potential_single_cell)
+length(scRNA)
+
+paired<-paired[-scRNA,]
+
+```
+
+# Filter #2:
+## Filter based on total read count for 75% of SNPs in each sample
+
+```{r}
+quantile(paired$read75, na.rm=T)
+low_count<-paired %>% filter(read75>10)
+
+# number of samples removed in this step
+nrow(paired)- nrow(low_count)
+
+```
+
+## Plot filter 2
+
+```{r, warning=FALSE,message = FALSE, error=FALSE}
+plot_df<-paired %>% filter(read75<=10)
+
+
+data_samp<-plot_df[sample(nrow(plot_df), 4),]
+
+make_plot(data_samp)
+
+```
+
+
+# Filter #3:
+## Filter based on low number of heterozygous
+
+```{r}
+quantile(low_count$nHet, na.rm=T)
+nhet<- low_count %>% filter(nHet>1000)
+
+# number of samples removed in this step
+nrow(low_count)- nrow(nhet)
+
+```
+
+## Plot filter 3
+
+```{r, warning=FALSE,message = FALSE, error=FALSE}
+plot_df<-low_count %>% filter(nHet<=1000)
+
+
+data_samp<-plot_df[sample(nrow(plot_df), 3),]
+
+make_plot(data_samp)
+
+```
+
+# Filter #4:
+## Filter cancer samples
+
+```{r}
+paired_noncancer<-nhet[-which(nhet$sample_acc %in% cancer[,1]),]
+
+# number of samples removed in this step
+nrow(nhet)- nrow(paired_noncancer)
+
+```
+
+## Plot filter 4
+
+```{r, warning=FALSE,message = FALSE, error=FALSE}
+plot_df<-nhet[which(nhet$sample_acc %in% cancer[,1]),]
+
+
+data_samp<-plot_df[sample(nrow(plot_df), 3),]
+
+make_plot(data_samp)
+
+```
+
+
+
+# Filter #5:
+## Filter based on extreme median ref-ratio
+
+```{r}
+quantile(paired_noncancer$ref_ratio, na.rm=T)
+fold_c<- paired_noncancer %>% filter(ref_ratio>0.4, ref_ratio<0.6 )
+
+# number of samples removed in this step
+nrow(paired_noncancer)- nrow(fold_c)
+
+```
+
+
+
+
+
+# Filter #6:
+## Filter based on uni_norm value
+
+```{r}
+quantile(fold_c$uni_norm, na.rm=T)
+good<- fold_c %>%  filter(uni_norm<0.185)
+
+# number of samples removed in this step
+nrow(fold_c)- nrow(good)
+
+```
+
+## Plot filter 6
+
+```{r, warning=FALSE,message = FALSE, error=FALSE}
+plot_df<-fold_c %>%  filter(uni_norm>0.185)
+
+
+data_samp<-plot_df[sample(nrow(plot_df), 3),]
+
+make_plot(data_samp)
+
+```
+
+# Final number of samples:
+
+```{r}
+nrow(good)
+```
+
+
+## Plot Good samples
+
+```{r, warning=FALSE,message = FALSE,error=FALSE}
+
+data_samp<-good[sample(nrow(good), 3),]
+
+make_plot(data_samp)
+
+```
+

@@ -1,0 +1,89 @@
+---
+title: "SRA_runVSexpr"
+author: "Afrooz Razi"
+date: "2024-06-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#render("QC/SRAexperimentVSrun.Rmd")
+```
+
+# SRA Experiment ID vs Run ID
+
+In this document, I will look at number of samples based on experiment ID and run ID. I think we should add all the runs that are submitted under the same experiment ID. Before moving forward with this, we want to know how many experiments have 1 run and whether are the runs for an experiment were submitted on the same date.
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+
+
+recount3_metadata<-read_tsv("/dcs04/hansen/data/recount_genotype/PCA/SRA/Recount3_metadata.tsv")
+
+```
+
+# Number of Runs and Experiments:
+We have 316,447 runs and 265,949 experiments
+
+```{r}
+met<-recount3_metadata[,c(colnames(recount3_metadata)[1:6],"run_published","seq_type")]
+
+#How many Runs do we have?
+length(unique(met$external_id))
+length(unique(met$experiment_acc))
+
+```
+
+# What is this stat when separated based on sequencing type?
+
+- Max number of runs in one experiment:
+- Categorize the experiments based on number of runs:
+
+```{r}
+pp<-met %>% group_by(experiment_acc,seq_type) %>% summarise(n=n())
+
+#Max number of runs in one experiment:
+pp %>% group_by(seq_type) %>%  summarize(max(n))
+
+#Categorize the experiments based on number of runs:
+pp2<-pp %>% mutate(run_num= case_when( n==1 ~ "1",
+                                  n>1 & n<=3 ~ "1-3",
+                                  n>3 & n<=6 ~ "3-6",
+                                  n>6 & n<=15 ~ "6-15",
+                                  n>15 & n<=25 ~ "15-25",
+                                  n>25 ~ ">25"))
+
+pp2_sum<-pp2 %>% group_by(seq_type,run_num) %>%   summarize(total_exper=n())
+pp2_sum$run_num<- factor(pp2_sum$run_num, levels= c("1","1-3","3-6","6-15","15-25",">25"))
+pp2_sum<-pp2_sum[order(pp2_sum$run_num),]
+
+print(pp2_sum)
+```
+
+
+# Some runs for the same experiment ID were not published on the same date.
+There are 211 experiments with more than 1 publishing date
+
+```{r}
+nrow(publish_date_abnorm)
+```
+
+
+```{r}
+publish_date<-met %>% mutate(run_published=date(run_published)) %>% group_by(experiment_acc,seq_type) %>% summarise(pub_date=length(unique(run_published)),
+                                                                                                                    run_num=n())
+
+publish_date_abnorm<-publish_date %>% filter(pub_date>1)
+head(publish_date_abnorm)
+
+```
+
+
+
+
+
+
+
