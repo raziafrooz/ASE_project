@@ -1,0 +1,4 @@
+genotypedSamples,sample_id,study,experiment_acc,warning,seq_type
+/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/output/DRP000366/predict_genotype_accuracy/DRR000897_predGenotypes_final.csv.gz,DRR000897,DRP000366,DRX000547,"",bulk
+/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/output/DRP000425/predict_genotype_accuracy/DRR001174_predGenotypes_final.csv.gz,DRR001174,DRP000425,DRX000771,"",bulk
+/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/output/DRP000425/predict_genotype_accuracy/DRR001173_predGenotypes_final.csv.gz,DRR001173,DRP000425,DRX000770,"",bulk
