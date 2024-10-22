@@ -1,0 +1,220 @@
+#wasp<-gtex_tissue
+#no_wasp<-gtex_tissue
+library(AnnotationHub)
+library("org.Hs.eg.db")
+library(tidyverse)
+library(data.table)
+library(GenomicRanges)
+library(rtracklayer)
+
+ah <- AnnotationHub()
+ah <- query(ah, c("v26","GENCODE","Homo sapiens","GRch38")) #v26 was used in GTExV8
+TxDb<-ah[["AH75155"]]
+tx_38<-exons(TxDb,columns=c("TXNAME","GENEID","EXONID","CDSID"))
+
+tissues_names<-as.data.frame(list.files(path ="/dcl01/hansen/data/arazi/ASE/dbGap/GTEx_Analysis_v8_ASE_counts_by_tissue/"))
+colnames(tissues_names)<-"file_name"
+tissues_names$abb<-sapply(strsplit(gsub("\\.","-",tissues_names$file_name),"-"), function(xx){ xx[2]  })
+
+tissue_abb<-read.table("~/ASE-data/data/gtex_tissue_abbre.txt", sep="\t")
+colnames(tissue_abb)<-c("name","abb")
+tissues_names$full_name<-tissue_abb$name[match(tissues_names$abb,tissue_abb$abb)]
+
+tissues_names$file_name<-paste0("/dcl01/hansen/data/arazi/ASE/dbGap/GTEx_Analysis_v8_ASE_counts_by_tissue/", tissues_names$file_name)
+
+gtex_metadata<-fread("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/AggregateFiles/all_GTEx.csv")
+gtex_metadata$sample_id_rep<-str_sub(gtex_metadata$sample_id, end= -3)
+
+#-----------------------------------------------------------------
+#-----------------------------------------------------------------
+xx<-read.csv("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/metadata/all_gtex_metadata.csv")
+gtex_sim<-fread("/dcs07/hansen/data/recount_ASE/data/gtex_simulation.csv.gz")
+gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="start",end.field = "start")
+
+study<-xx$study[1]
+wasp_1<- fread(tissues_names$file_name[tissues_names$full_name==study][1]) %>% 
+  filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1,GENOTYPE_WARNING<1)
+colnames(wasp_1)[1:2]<- c("chr", "start")
+
+
+xx<-xx[xx$study==study,]
+recount_sig_snps<-c()
+for(ss in 42:length(unique(xx$sample_id))){
+
+  print(ss)
+
+sam<-unique(xx$sample_id)[ss]
+sam_id<-xx$sample_id_rep[xx$sample_id==sam]
+
+
+
+
+ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
+  filter(pred_genotype==2, coverage>=8) %>% 
+  mutate(ref_ratio=ref_count/coverage,
+         alt_count=coverage-ref_count)
+
+
+
+# perform multiple testing correction with FDR
+#ase_df$q_val = p.adjust(ase_df$p_val, method = "fdr")
+
+
+bigWig_path<-xx$total[which(xx$sample_id_rep==sam_id)]
+ase_df_gr<-makeGRangesFromDataFrame(ase_df,seqnames="chr",start.field ="start",end.field = "start")
+
+
+
+bigwig <-tryCatch(
+  {
+    import(bigWig_path, format = "bigwig")
+  },
+  error=function(cond) {
+    message(paste("Error loading bigwig file: ", bigWig_path))
+    message(cond)
+    return(NA)
+  },
+  warning=function(cond) {
+    message(paste("Warning loading bigwig file: ", bigWig_path))
+    message(cond)
+    return(NA)
+  },
+  finally={}
+)    
+if(all(is.na(bigwig))) {
+  return(NA)
+}
+overlap_loci <- findOverlaps(ase_df_gr, bigwig)
+ase_df$bigwig_count <- bigwig$score[subjectHits(overlap_loci)]
+
+
+
+ase_df<-ase_df %>%
+  dplyr::select(chr, start,ref_count,alt_count, coverage,bigwig_count,ref_ratio )
+
+
+ase_df$err_per <- (ase_df$bigwig_count - ase_df$coverage)/ase_df$bigwig_count
+
+
+aa<-1-pbinom((ase_df$alt_count-1), size=ase_df$coverage, prob=mean(ase_df$err_per,na.rm=T))
+rr<-1-pbinom((ase_df$ref_count-1), size=ase_df$coverage, prob=mean(ase_df$err_per,na.rm=T))
+
+
+ase_df$geno_err<-rr+aa
+
+
+ase_df<-ase_df[-which(ase_df$err_per>=0.05),] 
+ase_df<-ase_df[-which(ase_df$geno_err>=0.001),]
+
+
+
+
+ase_df_gr<-makeGRangesFromDataFrame(ase_df,seqnames="chr",start.field ="start",end.field = "start")
+
+ov<-findOverlaps(ase_df_gr,gtex_sim_gr)
+ase_df$LOW_MAPABILITY[queryHits(ov)]<-gtex_sim$LOW_MAPABILITY[subjectHits(ov)]
+ase_df$MAPPING_BIAS_SIM[queryHits(ov)]<-gtex_sim$MAPPING_BIAS_SIM[subjectHits(ov)]
+
+ase_df<-ase_df %>% filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1)
+
+#------
+#remove HLA GENES
+
+
+ase_df_gr<-makeGRangesFromDataFrame(ase_df,seqnames="chr",start.field ="start",end.field = "start")
+ov<-findOverlaps(tx_38,ase_df_gr)
+
+ase_df$GENE_ID<-NA
+ase_df$GENE_ID[subjectHits(ov)]<-unlist(tx_38$GENEID[queryHits(ov)])
+ase_df$GENE_ID<-gsub("\\.\\d+", "", ase_df$GENE_ID)
+
+ase_df$symbol = mapIds(org.Hs.eg.db,
+                       keys=ase_df$GENE_ID, #Column containing Ensembl gene ids
+                       column="SYMBOL",
+                       keytype="ENSEMBL",
+                       multiVals="first")
+
+
+ase_df<-ase_df %>%
+  filter(!str_detect(symbol,"HLA"))
+
+
+
+
+#------
+
+
+
+
+is.median<-median(ase_df$ref_ratio)
+ase_df$p_val = apply(ase_df[,c("ref_count","alt_count")], 1, function(x) {
+  binom.test(round(x[1],1),round((x[1]+x[2]),1),p=is.median)$p.value})
+
+ase_df$q_val = p.adjust(ase_df$p_val, method = "fdr")
+
+
+wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
+dd<-inner_join(wasp_1_sam,ase_df)
+
+uni_gene_rec<-unique(ase_df$GENE_ID[ase_df$q_val<0.01])
+uni_gene_wasp<-unique(wasp_1_sam$GENE_ID[wasp_1_sam$BINOM_P_ADJUSTED<0.05])
+uni_gene_both<-unique(dd$GENE_ID[dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01])
+sum(uni_gene_rec %in% uni_gene_wasp)
+
+df_x<-data.frame(sample_id=sam,
+           sig_recount.01=sum(ase_df$q_val<0.01),
+           sig_recount.05=sum(ase_df$q_val<0.05),
+           sig_gtex= sum(wasp_1_sam$BINOM_P_ADJUSTED<0.05,na.rm=T),
+           sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01),
+           only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.01),
+           genes_recount=length(uni_gene_rec),
+           genes_wap=length(uni_gene_wasp),
+           genes_both=sum(uni_gene_rec %in% uni_gene_wasp)
+           )
+
+recount_sig_snps<-rbind(recount_sig_snps,df_x)
+
+}
+#fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
+recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
+qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
+qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
+
+
+colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
+
+qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
+qc_df<-qc_df %>% select(SAMPLE_ID,overlap )
+try1<-left_join(qc_df,recount_sig_snps)
+
+qc_df %>% filter(overlap>28)
+
+plot_df<-try1 %>%filter(!is.na(sig_snps_recount)) %>% sample_n(10) %>% 
+  pivot_longer(!c(SAMPLE_ID,overlap_group), names_to = "pipeline", values_to = "n_sig_snps")
+
+pdf(file="~/plot/ASE/significant_snps.pdf", width = 10, height = 6)
+
+ggplot(data=plot_df, aes(x=SAMPLE_ID, y=n_sig_snps, fill=pipeline)) +
+  geom_bar(stat="identity", position=position_dodge())+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+dev.off()
+
+try1<-left_join(try1,qc_df)
+try1$overlap_group<-cut_number(try1$overlap,5)
+
+plot_df<-try1 %>%filter(!is.na(sig_snps_recount))
+plot_df$diff<-plot_df$sig_snps_no_wasp-plot_df$sig_snps_recount
+
+
+pdf(file="~/plot/ASE/significant_snps_2.pdf", width = 10, height = 6)
+
+ggplot(data=plot_df, aes(x=overlap_group, y=diff)) +
+  geom_boxplot()+
+  labs(y="sig SNP difference (no_wasp - recount)",
+       title= "Number of SNPs that are significant between no-wasp and recount")
+dev.off()
+

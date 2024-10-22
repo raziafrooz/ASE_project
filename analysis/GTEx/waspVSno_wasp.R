@@ -102,88 +102,88 @@ dev.off()
 
 
 #===================================================================
-
-
-ss=1
-tissues<-wasp$full_name
-#for(ss in 2:length(tissues)){
-study<-tissues[ss]
-print(study)
-
-
-wasp_1<- fread(wasp$file_name[wasp$full_name==study][1])
-colnames(wasp_1)[1:2]<- c("chr", "start")
-
-sam<-"GTEX-1122O-2026-SM-9YFMG"#unique(wasp_1$SAMPLE_ID)[1]
-wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
-
-
-ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
-  filter(pred_genotype==2, coverage>=8) %>% 
-  mutate(ref_ratio=ref_count/coverage)
-
-
-ase_wasp<- inner_join(ase_df,wasp_1_sam)
-
-
-
-
-no_wasp_1<- fread(no_wasp$file_name[no_wasp$full_name==study][1])
-colnames(no_wasp_1)[1:2]<- c("chr", "start")
-
-no_wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
-ase_no_wasp<- inner_join(ase_df,no_wasp_1_sam)
-
-
-
-join_ase<- inner_join(wasp_1,no_wasp_1, by=c("chr", "start","SAMPLE_ID"))
-rm(no_wasp_1)
-rm(wasp_1)
-
-plot_df<- inner_join(ase_wasp,ase_no_wasp,by=c("chr", "start","SAMPLE_ID"))%>% 
-  mutate(alt_count.x=coverage.x-ref_count.x,alt_count.y=coverage.y-ref_count.y,
-         mean_ref=(log2(ref_count.x)+log2(ref_count.y))/2,
-         ratio_ref= log2(ref_count.x)-log2(ref_count.y),
-         mean_alt=(log2(alt_count.x)+log2(alt_count.y))/2,
-         ratio_alt= log2(alt_count.x)-log2(alt_count.y),
-         mean_ref_ratio=(log2(ref_ratio.x)+log2(ref_ratio.y))/2,
-         ratio_ref_ratio= log2(ref_ratio.x)-log2(ref_ratio.y))
-
-
-plot_df<-join_ase %>% filter(SAMPLE_ID== unique(join_ase$SAMPLE_ID)[1]) %>% 
-  mutate(mean_ref=(log2(REF_COUNT.x)+log2(REF_COUNT.y))/2,
-         ratio_ref= log2(REF_COUNT.x)-log2(REF_COUNT.y),
-         mean_alt=(log2(ALT_COUNT.x)+log2(ALT_COUNT.y))/2,
-         ratio_alt= log2(ALT_COUNT.x)-log2(ALT_COUNT.y),
-         mean_ref_ratio=(log2(REF_RATIO.x)+log2(REF_RATIO.y))/2,
-         ratio_ref_ratio= log2(REF_RATIO.x)-log2(REF_RATIO.y))
-
-pdf(file="~/plot/ASE/waspVSnowasp_scatter_recount.pdf", width = 10, height = 6)
-
-
-ggplot(plot_df, aes(x=mean_ref, y=ratio_ref))+
-  geom_point(alpha=0.4)+
-  geom_abline(slope=0,color="red")+
-  labs(y="log2 ratio wasp_ref over no_wasp_ref",
-       x= "mean ref counts",
-       title="MA plot of ref counts for one sample")
-
-ggplot(plot_df, aes(x=mean_alt, y=ratio_alt))+
-  geom_point(alpha=0.4)+
-  geom_abline(slope=0,color="red")+
-  labs(y="log2 ratio wasp_alt over no_wasp_alt",
-       x= "mean alt counts",
-       title="MA plot of alt counts for one sample")
-
-
-ggplot(plot_df, aes(x=REF_RATIO.x, y=REF_RATIO.y))+
-  geom_point(alpha=0.4)+
-  geom_abline(slope=1,color="red")+
-  labs(y="wasp ref_ratio",
-       x= "no-wasp ref_ratio",
-       title="ref_ratio comparison for one sample")
-dev.off()
-
+# 
+# 
+# ss=1
+# tissues<-wasp$full_name
+# #for(ss in 2:length(tissues)){
+# study<-tissues[ss]
+# print(study)
+# 
+# 
+# wasp_1<- fread(wasp$file_name[wasp$full_name==study][1])
+# colnames(wasp_1)[1:2]<- c("chr", "start")
+# 
+# sam<-unique(wasp_1$SAMPLE_ID)[1]
+# wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
+# 
+# 
+# ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
+#   filter(pred_genotype==2, coverage>=8) %>% 
+#   mutate(ref_ratio=ref_count/coverage)
+# 
+# 
+# ase_wasp<- inner_join(ase_df,wasp_1_sam)
+# 
+# 
+# 
+# 
+# no_wasp_1<- fread(no_wasp$file_name[no_wasp$full_name==study][1])
+# colnames(no_wasp_1)[1:2]<- c("chr", "start")
+# 
+# no_wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
+# ase_no_wasp<- inner_join(ase_df,no_wasp_1_sam)
+# 
+# 
+# 
+# join_ase<- inner_join(wasp_1,no_wasp_1, by=c("chr", "start","SAMPLE_ID"))
+# rm(no_wasp_1)
+# rm(wasp_1)
+# 
+# plot_df<- inner_join(ase_wasp,ase_no_wasp,by=c("chr", "start","SAMPLE_ID"))%>% 
+#   mutate(alt_count.x=coverage.x-ref_count.x,alt_count.y=coverage.y-ref_count.y,
+#          mean_ref=(log2(ref_count.x)+log2(ref_count.y))/2,
+#          ratio_ref= log2(ref_count.x)-log2(ref_count.y),
+#          mean_alt=(log2(alt_count.x)+log2(alt_count.y))/2,
+#          ratio_alt= log2(alt_count.x)-log2(alt_count.y),
+#          mean_ref_ratio=(log2(ref_ratio.x)+log2(ref_ratio.y))/2,
+#          ratio_ref_ratio= log2(ref_ratio.x)-log2(ref_ratio.y))
+# 
+# 
+# plot_df<-join_ase %>% filter(SAMPLE_ID== unique(join_ase$SAMPLE_ID)[1]) %>% 
+#   mutate(mean_ref=(log2(REF_COUNT.x)+log2(REF_COUNT.y))/2,
+#          ratio_ref= log2(REF_COUNT.x)-log2(REF_COUNT.y),
+#          mean_alt=(log2(ALT_COUNT.x)+log2(ALT_COUNT.y))/2,
+#          ratio_alt= log2(ALT_COUNT.x)-log2(ALT_COUNT.y),
+#          mean_ref_ratio=(log2(REF_RATIO.x)+log2(REF_RATIO.y))/2,
+#          ratio_ref_ratio= log2(REF_RATIO.x)-log2(REF_RATIO.y))
+# 
+# pdf(file="~/plot/ASE/waspVSnowasp_scatter_recount.pdf", width = 10, height = 6)
+# 
+# 
+# ggplot(plot_df, aes(x=mean_ref, y=ratio_ref))+
+#   geom_point(alpha=0.4)+
+#   geom_abline(slope=0,color="red")+
+#   labs(y="log2 ratio wasp_ref over no_wasp_ref",
+#        x= "mean ref counts",
+#        title="MA plot of ref counts for one sample")
+# 
+# ggplot(plot_df, aes(x=mean_alt, y=ratio_alt))+
+#   geom_point(alpha=0.4)+
+#   geom_abline(slope=0,color="red")+
+#   labs(y="log2 ratio wasp_alt over no_wasp_alt",
+#        x= "mean alt counts",
+#        title="MA plot of alt counts for one sample")
+# 
+# 
+# ggplot(plot_df, aes(x=REF_RATIO.x, y=REF_RATIO.y))+
+#   geom_point(alpha=0.4)+
+#   geom_abline(slope=1,color="red")+
+#   labs(y="wasp ref_ratio",
+#        x= "no-wasp ref_ratio",
+#        title="ref_ratio comparison for one sample")
+# dev.off()
+# 
 
 #======================================================
 
