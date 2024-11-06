@@ -41,10 +41,10 @@ fwrite(plot,plotFile)
 }
 
 plot<-plot %>% mutate(indv_id= paste0(str_split_i(sample_id,"-",1),"-",str_split_i(sample_id,"-",2)))
-bad_indv<-unique(plot$indv_id[which(plot$ref_ratio<0.45)])
+bad_indv<-unique(plot$indv_id[which(plot$ref_ratio<0.45 )])
 
 
-pdf(file="~/plot/ASE/GTEx_recount_ase.pdf", width = 10, height = 4)
+pdf(file="~/plot/ASE/GTEx_recount_ase_2.pdf", width = 10, height = 4)
 ggplot(plot,aes(y=ref_ratio, x=tissue))+
   geom_point(alpha=0.3)+ 
   theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust=1))+
@@ -54,7 +54,7 @@ ggplot(plot,aes(y=ref_ratio, x=tissue))+
   cc_fill+
   cc_color
 
-ggplot(plot[plot$ref_ratio>0.45,],aes(y=ref_ratio, x=tissue))+
+ggplot(plot[plot$ref_ratio>0.45 | plot$ref_ratio<0.55,],aes(y=ref_ratio, x=tissue))+
   geom_point(alpha=0.3)+ 
   theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust=1))+
   geom_hline(yintercept = 0.5,linetype = "dashed", alpha=0.5, color="red")+
@@ -72,6 +72,25 @@ ggplot(plot[which(plot$indv_id %in% bad_indv),],aes(y=ref_ratio, x=tissue, color
   # cc_color
 dev.off()
 
+qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
+qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
 
+colnames(qc_df)[which(colnames(qc_df)=="external_id")]<-"sample_id"
+try1<-left_join(qc_df,plot)
 
+pdf(file="~/plot/ASE/test_2.pdf", width = 10, height = 4)
+try1.1<-try1%>% filter(SMGEBTCHT=="TruSeq.v1",overlap<200)
+ggplot(try1.1,aes(y=ref_ratio, x=tissue))+
+  geom_point(alpha=0.3)+ 
+  theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust=1))+
+  geom_hline(yintercept = 0.5,linetype = "dashed", alpha=0.5, color="red")+
+  labs(title=paste0("samples in all gtex tissues: total = ", nrow(try1.1), ", overlap<200 and TruSeq.v1"),
+       subtitle=paste0( sum(round(try1.1$ref_ratio,2)==0.5)," samples have exactly ref-ratio = 0.5")) 
 
+ggplot(try1,aes(y=ref_ratio, x=SMGEBTCHT))+
+  geom_point(alpha=0.3)+ 
+  theme(axis.text.x = element_text(angle = 30, vjust = 0.5, hjust=1))+
+  geom_hline(yintercept = 0.5,linetype = "dashed", alpha=0.5, color="red")+
+  labs(title=paste0("samples in all gtex tissues: total = ", nrow(try1), ", overlap<200 and TruSeq.v1"),
+       subtitle=paste0( sum(round(try1$ref_ratio,2)==0.5)," samples have exactly ref-ratio = 0.5")) 
+dev.off()

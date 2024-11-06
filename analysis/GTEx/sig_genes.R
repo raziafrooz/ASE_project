@@ -154,7 +154,7 @@ ase_df$q_val = p.adjust(ase_df$p_val, method = "fdr")
 
 
 wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
-dd<-inner_join(wasp_1_sam,ase_df)
+dd<-full_join(wasp_1_sam,ase_df,by=c("chr","start"))
 
 uni_gene_rec<-unique(ase_df$GENE_ID[ase_df$q_val<0.01])
 uni_gene_wasp<-unique(wasp_1_sam$GENE_ID[wasp_1_sam$BINOM_P_ADJUSTED<0.05])
@@ -165,8 +165,8 @@ df_x<-data.frame(sample_id=sam,
            sig_recount.01=sum(ase_df$q_val<0.01),
            sig_recount.05=sum(ase_df$q_val<0.05),
            sig_gtex= sum(wasp_1_sam$BINOM_P_ADJUSTED<0.05,na.rm=T),
-           sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01),
-           only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.01),
+           sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.05,na.rm=T),
+           only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.05,na.rm=T),
            genes_recount=length(uni_gene_rec),
            genes_wap=length(uni_gene_wasp),
            genes_both=sum(uni_gene_rec %in% uni_gene_wasp)
@@ -185,36 +185,62 @@ colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
 
 qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
 qc_df<-qc_df %>% select(SAMPLE_ID,overlap )
-try1<-left_join(qc_df,recount_sig_snps)
+try1<-right_join(qc_df,recount_sig_snps)
 
-qc_df %>% filter(overlap>28)
+try1 %>% filter(overlap>4) %>%  head(3)
 
-plot_df<-try1 %>%filter(!is.na(sig_snps_recount)) %>% sample_n(10) %>% 
-  pivot_longer(!c(SAMPLE_ID,overlap_group), names_to = "pipeline", values_to = "n_sig_snps")
+plot_df<-try1 %>%filter(sig_gtex>0) %>% sample_n(10) %>% 
+  pivot_longer(!c(SAMPLE_ID,overlap), names_to = "pipeline", values_to = "n_sig")
 
-pdf(file="~/plot/ASE/significant_snps.pdf", width = 10, height = 6)
+pdf(file="~/plot/ASE/significant_snps_wasp.pdf", width = 10, height = 6)
 
-ggplot(data=plot_df, aes(x=SAMPLE_ID, y=n_sig_snps, fill=pipeline)) +
+plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.01","sig_recount.05","sig_gtex","sig_both","only_recount"))
+
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
   geom_bar(stat="identity", position=position_dodge())+
   labs(y="# of sig SNPs",
-       title="# of SNPs with fdr<0.05")+
+       title="# of SNPs with fdr<0.05 or fdr<0.01")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("genes_recount","genes_wap","genes_both"))
+
+
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
+  geom_bar(stat="identity", position=position_dodge())+
+  labs(y="# of sig genes",
+       title="# of sig genes (recount fdr 0.01)")+
   theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
 
 
 dev.off()
 
-try1<-left_join(try1,qc_df)
+try1<-try1%>%filter(sig_gtex>0)
 try1$overlap_group<-cut_number(try1$overlap,5)
 
-plot_df<-try1 %>%filter(!is.na(sig_snps_recount))
-plot_df$diff<-plot_df$sig_snps_no_wasp-plot_df$sig_snps_recount
+pdf(file="~/plot/ASE/significant_snps_wasp2.pdf", width = 10, height = 6)
 
-
-pdf(file="~/plot/ASE/significant_snps_2.pdf", width = 10, height = 6)
-
-ggplot(data=plot_df, aes(x=overlap_group, y=diff)) +
+ggplot(data=try1, aes(x=overlap_group, y=sig_both)) +
   geom_boxplot()+
-  labs(y="sig SNP difference (no_wasp - recount)",
-       title= "Number of SNPs that are significant between no-wasp and recount")
+  labs(y="# same sig snps",
+       title= "Number of SNPs that are significant both in wasp and recount")
+
+ggplot(data=try1, aes(x=overlap_group, y=genes_both)) +
+  geom_boxplot()+
+  labs(y="# same sig genes",
+       title= "Number of genes that are significant both in wasp and recount")
+
 dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
 

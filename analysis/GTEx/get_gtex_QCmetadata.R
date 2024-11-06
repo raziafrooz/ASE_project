@@ -10,6 +10,7 @@ library(ggplot2)
 
 
 human_projects <- available_projects()
+human_projects <- available_projects()
 qc_meta<-subset(human_projects, file_source == "gtex" & project_type == "data_sources")
 plotFile<-"/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz"
 
@@ -29,10 +30,12 @@ for(ss in qc_meta$project){
   xx1 <- utils::read.delim(file_retrieve(url[1], verbose = FALSE))
   xx3 <- utils::read.delim(file_retrieve(url[3], verbose = FALSE))
   xx4 <- utils::read.delim(file_retrieve(url[4], verbose = FALSE))
+
+  tissue<-full_join(xx1,xx3,by=c("external_id","rail_id"))
+  tissue<-full_join(tissue,xx4,by=c("external_id","rail_id"))
   
-  tissue<-cbind(xx1,xx3,xx4)
   qc_df<-rbind(qc_df,tissue)
-  
+  rm(tissue)
 }
 
 fwrite(qc_df, plotFile)
