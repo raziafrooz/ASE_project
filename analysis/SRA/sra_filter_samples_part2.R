@@ -7,10 +7,11 @@ test_line<-readRDS("~/ASE/geuvadis_quantile_new.rds")
 final_tissue<-fread("/dcs07/hansen/data/recount_ASE/data/toUse_tissue_primaryCell.csv")
 uni_norm_df<-fread("/dcs07/hansen/data/recount_ASE/data/ase_uniNorm.csv")
 ontology<-readRDS("/dcs07/hansen/data/recount_ASE/data/sra_ontology_term.rds")
+prashanthi_annotations<-readRDS("~/ASE-data/data/prashanthi_annotations.rds")
 
 sample_plot<-uni_norm_df[which(uni_norm_df$uni_norm_mean <= 0.085),]
 final_tissue<- final_tissue %>% filter(experiment_acc %in% sample_plot$experiment_acc ) 
-
+final_tissue<-final_tissue[-which(final_tissue$library_layout=="single" & final_tissue$bc_frag.mode_length!=0),]
 #--------------------------
 #no annotation:
 #--------------------------
@@ -19,8 +20,53 @@ uni_norm_df_noann<-fread("/dcs07/hansen/data/recount_ASE/data/ase_uniNorm_noAnno
 
 sample_plot<-uni_norm_df_noann[which(uni_norm_df_noann$uni_norm_mean <= 0.085),]
 final_no_annot<- final_no_annot %>% filter(experiment_acc %in% sample_plot$experiment_acc ) 
+final_no_annot<-final_no_annot[-which(final_no_annot$library_layout=="single" & final_no_annot$bc_frag.mode_length!=0),]
 
-dim(final_no_annot)
+final_no_annot$sample_type<-prashanthi_annotations$tissue.category[match(final_no_annot$experiment_acc,prashanthi_annotations$sample)]
+final_no_annot$cancer<-prashanthi_annotations$cancer[match(final_no_annot$experiment_acc,prashanthi_annotations$sample)]
+final_no_annot$cancer[is.na(final_no_annot$cancer)]<-"unknown"
+final_no_annot<-final_no_annot %>% filter(cancer!="cancer",
+                                         !sample_type %in% c("adipose tissue–derived MSCs",
+                                                             "cancer cell line",
+                                                             "cancer cell lines",
+                                                             "Cells_Leukemia_cell_line_CML",
+                                                             "day 10 hESCs cardiac lineage",
+                                                             "day 6 hESCs cardiac lineage",
+                                                             "day 2 hESCs cardiac lineage",
+                                                             "differentiated iPSCs",
+                                                             "eGFP- cells from Kidney organoid",
+                                                             "eGFP+ cells from Kidney organoid",
+                                                             "embryonic carcinoma",
+                                                             "embryonic kidney",
+                                                             "Hep2 cell line",
+                                                             "hESC",
+                                                             "hESC-derived cells",
+                                                             "hESC differentiating into cardiomyocytes",
+                                                             "hESC-derived cells",
+                                                             "hESCs",
+                                                             "hESCs presomitic mesoderm",
+                                                             "hESCs somite",
+                                                             "hiPSC",
+                                                             "hiPSC-derived cells",
+                                                             "iPSC",
+                                                             "ipSCs",
+                                                             "IPSCs",
+                                                             "iPSCs",
+                                                             "leukemia cell line",
+                                                             "NK cells",
+                                                             "reprogramming cells",
+                                                             "reprogramming intermediates of hiF cells",
+                                                             "reprogramming intermediates of hiF-T cells",
+                                                             "sFRP2 knockdown mesenchymal stem cells",
+                                                             "sFRP2OE mesenchymal stem cells",
+                                                             "sFRP2 knockdown osteoblasts",
+                                                             "sFRP2OE osteoblasts",
+                                                             "transformed mesenchymal stem cells",
+                                                             "universal human reference",
+                                                             "universal human reference RNA",
+                                                             "umbilical vein endothelial cells"))
+
+
 #--------------------------
 xx<-readRDS("~/ASE/tissue.rds")
 ontology$parent<-xx
