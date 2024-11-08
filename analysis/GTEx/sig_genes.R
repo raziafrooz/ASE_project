@@ -31,22 +31,29 @@ xx<-read.csv("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_p
 gtex_sim<-fread("/dcs07/hansen/data/recount_ASE/data/gtex_simulation.csv.gz")
 gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="start",end.field = "start")
 
-study<-xx$study[1]
+recount_sig_snps<-c()
+
+for (k in 3:nrow(xx)){
+study<-xx$study[k]
+print(study)
 wasp_1<- fread(tissues_names$file_name[tissues_names$full_name==study][1]) %>% 
   filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1,GENOTYPE_WARNING<1)
 colnames(wasp_1)[1:2]<- c("chr", "start")
 
 
-xx<-xx[xx$study==study,]
-recount_sig_snps<-c()
-for(ss in 42:length(unique(xx$sample_id))){
+xx_one<-xx[xx$study==study,]
 
+#for(ss in 3:length(unique(xx$sample_id))){
+for(ss in 1:length(unique(wasp_1$SAMPLE_ID))){
   print(ss)
 
-sam<-unique(xx$sample_id)[ss]
-sam_id<-xx$sample_id_rep[xx$sample_id==sam]
+sam<-unique(wasp_1$SAMPLE_ID)[ss]
+sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam]
 
 
+wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
+if(nrow(wasp_1_sam)>1){
+  
 
 
 ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
@@ -60,7 +67,7 @@ ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1
 #ase_df$q_val = p.adjust(ase_df$p_val, method = "fdr")
 
 
-bigWig_path<-xx$total[which(xx$sample_id_rep==sam_id)]
+bigWig_path<-xx_one$total[which(xx_one$sample_id_rep==sam_id)]
 ase_df_gr<-makeGRangesFromDataFrame(ase_df,seqnames="chr",start.field ="start",end.field = "start")
 
 
@@ -128,18 +135,19 @@ ase_df$GENE_ID<-NA
 ase_df$GENE_ID[subjectHits(ov)]<-unlist(tx_38$GENEID[queryHits(ov)])
 ase_df$GENE_ID<-gsub("\\.\\d+", "", ase_df$GENE_ID)
 
-ase_df$symbol = mapIds(org.Hs.eg.db,
+gene_sym<- mapIds(org.Hs.eg.db,
                        keys=ase_df$GENE_ID, #Column containing Ensembl gene ids
                        column="SYMBOL",
                        keytype="ENSEMBL",
                        multiVals="first")
+id<-match(ase_df$GENE_ID, names(gene_sym))
+gene_sym<-gene_sym[!is.na(names(gene_sym))]
+gene_sym<-data.frame(symbol=unlist(gene_sym), GENE_ID=names(unlist(gene_sym)))
 
-
+ase_df$symbol<-gene_sym$symbol[match(ase_df$GENE_ID,gene_sym$GENE_ID)]
+  
 ase_df<-ase_df %>%
   filter(!str_detect(symbol,"HLA"))
-
-
-
 
 #------
 
@@ -156,32 +164,68 @@ ase_df$q_val = p.adjust(ase_df$p_val, method = "fdr")
 wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
 dd<-full_join(wasp_1_sam,ase_df,by=c("chr","start"))
 
-uni_gene_rec<-unique(ase_df$GENE_ID[ase_df$q_val<0.01])
-uni_gene_wasp<-unique(wasp_1_sam$GENE_ID[wasp_1_sam$BINOM_P_ADJUSTED<0.05])
-uni_gene_both<-unique(dd$GENE_ID[dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01])
-sum(uni_gene_rec %in% uni_gene_wasp)
 
-df_x<-data.frame(sample_id=sam,
-           sig_recount.01=sum(ase_df$q_val<0.01),
-           sig_recount.05=sum(ase_df$q_val<0.05),
-           sig_gtex= sum(wasp_1_sam$BINOM_P_ADJUSTED<0.05,na.rm=T),
-           sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.05,na.rm=T),
-           only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.05,na.rm=T),
-           genes_recount=length(uni_gene_rec),
-           genes_wap=length(uni_gene_wasp),
-           genes_both=sum(uni_gene_rec %in% uni_gene_wasp)
-           )
+
+
+
+dd_union<-inner_join(wasp_1_sam,ase_df,by=c("chr","start"))
+
+n_union<-nrow(dd_union)
+n_recount<-sum(!is.na(dd$ref_count))
+n_gtex<-sum(!is.na(dd$REF_COUNT))
+#before union:
+sig_recount.05=sum(dd$q_val<0.05, na.rm=T)
+sig_gtex= sum(dd$BINOM_P_ADJUSTED<0.05,na.rm=T)
+gene_rec<-sum(!is.na((unique(dd$GENE_ID.y[dd$q_val<0.05]))))
+gene_wasp<-sum(!is.na(unique(dd$GENE_ID.x[dd$BINOM_P_ADJUSTED<0.05])))
+gene_both<-sum(!is.na(unique(dd$GENE_ID.x[dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.05])))
+
+
+sig_recount.05_uni=sum(dd_union$q_val<0.05, na.rm=T)
+sig_gtex_uni= sum(dd_union$BINOM_P_ADJUSTED<0.05,na.rm=T)
+sig_both_uni= sum(dd_union$BINOM_P_ADJUSTED<0.05 & dd_union$q_val<0.05,na.rm=T)
+uni_gene_rec<-sum(!is.na((unique(dd_union$GENE_ID.y[dd_union$q_val<0.05]))))
+uni_gene_wasp<-sum(!is.na(unique(dd_union$GENE_ID.x[dd_union$BINOM_P_ADJUSTED<0.05])))
+
+df_x<-data.frame(SAMPLE_ID=sam,
+                 total_n_union=n_union,
+                 total_n_recount=n_recount,
+                 total_n_gtex=n_gtex,
+           sig_recount.05,sig_gtex,
+           sig_recount.05_uni,sig_gtex_uni,sig_both_uni,
+           gene_rec,gene_wasp,
+           uni_gene_rec,uni_gene_wasp, gene_both,study)
 
 recount_sig_snps<-rbind(recount_sig_snps,df_x)
-
+}}
 }
+fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
+# uni_gene_rec<-unique(ase_df$GENE_ID[ase_df$q_val<0.01])
+# uni_gene_wasp<-unique(wasp_1_sam$GENE_ID[wasp_1_sam$BINOM_P_ADJUSTED<0.05])
+# uni_gene_both<-unique(dd$GENE_ID[dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01])
+# 
+# 
+# df_x<-data.frame(sample_id=sam,
+#            sig_recount.01=sum(ase_df$q_val<0.01),
+#            sig_recount.05=sum(ase_df$q_val<0.05),
+#            sig_gtex= sum(wasp_1_sam$BINOM_P_ADJUSTED<0.05,na.rm=T),
+#            sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.05,na.rm=T),
+#            only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.05,na.rm=T),
+#            genes_recount=length(uni_gene_rec),
+#            genes_wap=length(uni_gene_wasp),
+#            genes_both=sum(uni_gene_rec %in% uni_gene_wasp)
+#            )
+
+#recount_sig_snps<-rbind(recount_sig_snps,df_x)
+
+#}
 #fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
-recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
+#recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
 qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
 qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
 
 
-colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
+#colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
 
 qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
 qc_df<-qc_df %>% select(SAMPLE_ID,overlap )
@@ -189,27 +233,81 @@ try1<-right_join(qc_df,recount_sig_snps)
 
 try1 %>% filter(overlap>4) %>%  head(3)
 
-plot_df<-try1 %>%filter(sig_gtex>0) %>% sample_n(10) %>% 
+plot_df<-try1 %>% sample_n(10) %>% 
   pivot_longer(!c(SAMPLE_ID,overlap), names_to = "pipeline", values_to = "n_sig")
 
-pdf(file="~/plot/ASE/significant_snps_wasp.pdf", width = 10, height = 6)
+#pdf(file="~/plot/ASE/significant_snps_wasp.pdf", width = 10, height = 6)
+pdf(file="~/plot/ASE/test.pdf", width = 10, height = 6)
 
-plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.01","sig_recount.05","sig_gtex","sig_both","only_recount"))
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.05","sig_gtex"))
 
 ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
   geom_bar(stat="identity", position=position_dodge())+
   labs(y="# of sig SNPs",
-       title="# of SNPs with fdr<0.05 or fdr<0.01")+
+       title="# of SNPs with fdr<0.05 before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3))%>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline%in%c("sig_recount.05","sig_gtex"))
+ggplot(data=plot_df_1, aes(x=overlap_group, y=n_sig, fill=pipeline)) +
+  geom_boxplot()+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
   theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
 
 
-plot_df_1<-plot_df %>% filter(pipeline%in%c("genes_recount","genes_wap","genes_both"))
+plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.05_uni", "sig_gtex_uni", "sig_both_uni"))
+
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
+  geom_bar(stat="identity", position=position_dodge())+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3))%>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline%in%c("sig_recount.05_uni", "sig_gtex_uni", "sig_both_uni"))
+ggplot(data=plot_df_1, aes(x=overlap_group, y=n_sig, fill=pipeline)) +
+  geom_boxplot()+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("gene_rec","gene_wasp"))
 
 
 ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
   geom_bar(stat="identity", position=position_dodge())+
   labs(y="# of sig genes",
-       title="# of sig genes (recount fdr 0.01)")+
+       title="# of sig genes (recount fdr 0.05) before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3))%>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline%in%c("gene_rec","gene_wasp"))
+ggplot(data=plot_df_1, aes(x=overlap_group, y=n_sig, fill=pipeline)) +
+  geom_boxplot()+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("uni_gene_rec","uni_gene_wasp","gene_both"))
+
+
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, fill=pipeline)) +
+  geom_bar(stat="identity", position=position_dodge())+
+  labs(y="# of sig genes",
+       title="# of sig genes (recount fdr 0.05) after union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3)) %>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline %in%c("uni_gene_rec","uni_gene_wasp","gene_both"))
+ggplot(data=plot_df_1, aes(x=overlap_group, y=n_sig, fill=pipeline)) +
+  geom_boxplot()+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
   theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
 
 
@@ -238,7 +336,27 @@ dev.off()
 
 
 
+#-----------------------
+pdf(file="~/plot/ASE/overlap_sig.pdf", width = 10, height = 6)
 
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3))%>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline%in%c("sig_recount.05","sig_gtex"))
+ggplot(data=plot_df_1, aes(x=overlap, y=n_sig, color=pipeline)) +
+  geom_point(alpha=0.4)+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+plot_df_1<-try1 %>% mutate(overlap_group=cut_number(overlap,3))%>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,overlap_group,study), names_to = "pipeline", values_to = "n_sig")%>% filter(pipeline%in%c("gene_rec","gene_wasp"))
+ggplot(data=plot_df_1, aes(x=overlap, y=n_sig, color=pipeline)) +
+  geom_point()+
+  labs(y="# of sig SNPs",
+       title="# of SNPs with fdr<0.05 before union")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+dev.off()
 
 
 
