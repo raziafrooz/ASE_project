@@ -7,6 +7,7 @@ library(data.table)
 library(GenomicRanges)
 library(rtracklayer)
 
+#===========================================================
 ah <- AnnotationHub()
 ah <- query(ah, c("v26","GENCODE","Homo sapiens","GRch38")) #v26 was used in GTExV8
 TxDb<-ah[["AH75155"]]
@@ -33,8 +34,8 @@ gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="star
 
 recount_sig_snps<-c()
 
-for (k in 3:nrow(xx)){
-study<-xx$study[k]
+for (k in 1:length(unique(xx$study))){
+study<-unique(xx$study)[k]
 print(study)
 wasp_1<- fread(tissues_names$file_name[tissues_names$full_name==study][1]) %>% 
   filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1,GENOTYPE_WARNING<1)
@@ -51,9 +52,9 @@ sam<-unique(wasp_1$SAMPLE_ID)[ss]
 sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam]
 
 
-wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam) 
+wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam)
 if(nrow(wasp_1_sam)>1){
-  
+
 
 
 ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
@@ -199,28 +200,8 @@ df_x<-data.frame(SAMPLE_ID=sam,
 recount_sig_snps<-rbind(recount_sig_snps,df_x)
 }}
 }
-fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
-# uni_gene_rec<-unique(ase_df$GENE_ID[ase_df$q_val<0.01])
-# uni_gene_wasp<-unique(wasp_1_sam$GENE_ID[wasp_1_sam$BINOM_P_ADJUSTED<0.05])
-# uni_gene_both<-unique(dd$GENE_ID[dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.01])
-# 
-# 
-# df_x<-data.frame(sample_id=sam,
-#            sig_recount.01=sum(ase_df$q_val<0.01),
-#            sig_recount.05=sum(ase_df$q_val<0.05),
-#            sig_gtex= sum(wasp_1_sam$BINOM_P_ADJUSTED<0.05,na.rm=T),
-#            sig_both= sum(dd$BINOM_P_ADJUSTED<0.05 & dd$q_val<0.05,na.rm=T),
-#            only_recount= sum(dd$BINOM_P_ADJUSTED>=0.05 & dd$q_val<0.05,na.rm=T),
-#            genes_recount=length(uni_gene_rec),
-#            genes_wap=length(uni_gene_wasp),
-#            genes_both=sum(uni_gene_rec %in% uni_gene_wasp)
-#            )
-
-#recount_sig_snps<-rbind(recount_sig_snps,df_x)
-
-#}
 #fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
-#recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
+recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
 qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
 qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
 
@@ -228,11 +209,11 @@ qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_l
 #colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
 
 qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
-qc_df<-qc_df %>% select(SAMPLE_ID,overlap )
+qc_df<-qc_df %>% filter(SMGEBTCHT=="TruSeq.v1", overlap<200) %>%  dplyr::select(SAMPLE_ID,overlap )
 try1<-right_join(qc_df,recount_sig_snps)
 
-try1 %>% filter(overlap>4) %>%  head(3)
-
+try1 %>% filter(gene_rec>7000) %>%  head(3)
+quantile(try1$gene_rec)
 plot_df<-try1 %>% sample_n(10) %>% 
   pivot_longer(!c(SAMPLE_ID,overlap), names_to = "pipeline", values_to = "n_sig")
 
@@ -313,20 +294,24 @@ ggplot(data=plot_df_1, aes(x=overlap_group, y=n_sig, fill=pipeline)) +
 
 dev.off()
 
-try1<-try1%>%filter(sig_gtex>0)
-try1$overlap_group<-cut_number(try1$overlap,5)
+try1%>%filter(difference_gene< -2000) %>% head(1)
+try1<-try1 %>% mutate(overlap_group=cut_number(overlap,5),
+                      difference_snp=(sig_recount.05-sig_gtex),
+                      difference_gene=(gene_rec-gene_wasp))
 
-pdf(file="~/plot/ASE/significant_snps_wasp2.pdf", width = 10, height = 6)
+pdf(file="~/plot/ASE/sig_snps_wasp_diff_2.pdf", width = 10, height = 6)
 
-ggplot(data=try1, aes(x=overlap_group, y=sig_both)) +
+ggplot(data=try1, aes(x=overlap_group, y=difference_snp)) +
   geom_boxplot()+
-  labs(y="# same sig snps",
-       title= "Number of SNPs that are significant both in wasp and recount")
+  labs(y="# different sig snps",
+       title= "Differnce in number of SNPs that are significant both in wasp and recount",
+       subtitle=paste0("#samples= ", nrow(try1)))
 
-ggplot(data=try1, aes(x=overlap_group, y=genes_both)) +
+ggplot(data=try1, aes(x=overlap_group, y=difference_gene)) +
   geom_boxplot()+
-  labs(y="# same sig genes",
-       title= "Number of genes that are significant both in wasp and recount")
+  labs(y="# different sig genes",
+       title= "Differnce in number of genes that are significant both in wasp and recount",
+       subtitle=paste0("#samples= ", nrow(try1)))
 
 dev.off()
 
@@ -359,6 +344,23 @@ ggplot(data=plot_df_1, aes(x=overlap, y=n_sig, color=pipeline)) +
 dev.off()
 
 
+pdf(file="~/plot/ASE/test2.pdf", width = 10, height = 6)
+ggplot(data=try1, aes(x=overlap, y=sig_gtex)) +
+  geom_point(alpha=0.5)+
+  geom_smooth()+
+  labs(y="# of sig SNPs",
+       title="GTEx has more # significant SNP with less overlap")
+ggplot(data=try1, aes(x=overlap, y=gene_wasp)) +
+  geom_point(alpha=0.5)+
+  geom_smooth()+
+  labs(y="# of sig genes",
+       title="GTEx has more # significant genes with less overlap")
+dev.off()
+try1[1,]
 
 
+quantile(try1$gene_wasp)
 
+
+quantile(try1$sig_gtex)
+try1[try1$sig_gtex==16759.00,]
