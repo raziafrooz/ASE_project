@@ -95,8 +95,16 @@ ggplot(com_plot, aes(recount3)) +
 dev.off()
 
 
+pdf(file="~/plot/ASE/gtex_wasp.pdf", width = 10, height = 6)
 
-
+pp=ggplot(com_plot, aes(y=gtex, x=tissue))+
+  geom_point(alpha=0.5)+
+  geom_hline(yintercept = 0.5, color="red",linetype = "dashed", alpha=0.5)+
+  labs(title=paste0("total GTEx samples (After WASP) = ",sum(!is.na(com_plot$gtex))),
+       subtitle=paste0(sum(round(com_plot$gtex,2)==0.5, na.rm=T)," samples\nhave r-ratio=0.5 in GTEx")) + 
+  theme(axis.text.x = element_text(angle = 40, vjust = 0.5, hjust=1))
+print(pp)
+dev.off()
 
 
 

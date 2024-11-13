@@ -32,7 +32,7 @@ xx<-read.csv("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_p
 gtex_sim<-fread("/dcs07/hansen/data/recount_ASE/data/gtex_simulation.csv.gz")
 gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="start",end.field = "start")
 
-recount_sig_snps<-c()
+#recount_sig_snps<-c()
 
 for (k in 1:length(unique(xx$study))){
 study<-unique(xx$study)[k]
@@ -45,11 +45,11 @@ colnames(wasp_1)[1:2]<- c("chr", "start")
 xx_one<-xx[xx$study==study,]
 
 #for(ss in 3:length(unique(xx$sample_id))){
-for(ss in 1:length(unique(wasp_1$SAMPLE_ID))){
+for(ss in 608:length(unique(wasp_1$SAMPLE_ID))){
   print(ss)
 
 sam<-unique(wasp_1$SAMPLE_ID)[ss]
-sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam]
+sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam][1]
 
 
 wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam)
