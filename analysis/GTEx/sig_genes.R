@@ -33,11 +33,11 @@ gtex_sim<-fread("/dcs07/hansen/data/recount_ASE/data/gtex_simulation.csv.gz")
 gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="start",end.field = "start")
 
 #recount_sig_snps<-c()
-
-for (k in 1:length(unique(xx$study))){
+#length(unique(xx$study))
+for (k in 22:length(unique(xx$study))){
 study<-unique(xx$study)[k]
 print(study)
-wasp_1<- fread(tissues_names$file_name[tissues_names$full_name==study][1]) %>% 
+wasp_1<- fread(tissues_names$file_name[which(tissues_names$full_name==study)]) %>% 
   filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1,GENOTYPE_WARNING<1)
 colnames(wasp_1)[1:2]<- c("chr", "start")
 
@@ -45,9 +45,8 @@ colnames(wasp_1)[1:2]<- c("chr", "start")
 xx_one<-xx[xx$study==study,]
 
 #for(ss in 3:length(unique(xx$sample_id))){
-for(ss in 608:length(unique(wasp_1$SAMPLE_ID))){
+for(ss in 1:length(unique(wasp_1$SAMPLE_ID))){
   print(ss)
-
 sam<-unique(wasp_1$SAMPLE_ID)[ss]
 sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam][1]
 
@@ -120,7 +119,9 @@ ase_df<-ase_df[-which(ase_df$geno_err>=0.001),]
 ase_df_gr<-makeGRangesFromDataFrame(ase_df,seqnames="chr",start.field ="start",end.field = "start")
 
 ov<-findOverlaps(ase_df_gr,gtex_sim_gr)
+ase_df$LOW_MAPABILITY<-NA
 ase_df$LOW_MAPABILITY[queryHits(ov)]<-gtex_sim$LOW_MAPABILITY[subjectHits(ov)]
+ase_df$MAPPING_BIAS_SIM<-NA
 ase_df$MAPPING_BIAS_SIM[queryHits(ov)]<-gtex_sim$MAPPING_BIAS_SIM[subjectHits(ov)]
 
 ase_df<-ase_df %>% filter(LOW_MAPABILITY<1,MAPPING_BIAS_SIM<1)
@@ -210,7 +211,7 @@ qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_l
 
 qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
 qc_df<-qc_df %>% filter(SMGEBTCHT=="TruSeq.v1", overlap<200) %>%  dplyr::select(SAMPLE_ID,overlap )
-try1<-right_join(qc_df,recount_sig_snps)
+try1<-right_join(qc_df,recount_sig_snps,by=c("SAMPLE_ID"))
 
 try1 %>% filter(gene_rec>7000) %>%  head(3)
 quantile(try1$gene_rec)

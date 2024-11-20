@@ -1,0 +1,15 @@
+---
+title: "render"
+author: "Afrooz Razi"
+date: "2024-11-19"
+output: html_document
+---
+
+
+# To render .rmd document just run this on the cluster:
+
+```{r}
+library(rmarkdown)
+render("analysis.Rmd")
+```
+

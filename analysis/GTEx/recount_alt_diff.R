@@ -135,22 +135,30 @@ joined_all<-rbind(joined_all,jj)
 }
 
 #fwrite(joined_all, "~/test/joined_all.csv.gz")
-try1<-joined_all
-try1$overlap<-qc_df$overlap[match(try1$SAMPLE_ID,qc_df$SAMPLE_ID)]
+try1<-fread("~/test/joined_all.csv.gz")
+# try1$overlap<-qc_df$overlap[match(try1$SAMPLE_ID,qc_df$SAMPLE_ID)]
+try1<-try1 %>% filter(quantile_group=="0.5") %>% left_join(qc_df,by=c("SAMPLE_ID"))
 try1$overlap_group<-cut_number(try1$overlap,7)
-
 
 pdf(file="~/plot/ASE/Recount_alt_diff.pdf", width = 10, height = 6)
 
-ggplot(data=try1 %>% filter(quantile_group=="0.5"), aes(x=overlap_group, y=q_alt, color=quantile_group)) +
+ggplot(data=try1 %>% filter(quantile_group=="0.5"), aes(x=overlap_group, y=q_alt)) +
+  geom_boxplot()+
+  labs(title="on average, what's the difference in alt counts",
+       subtitle="recount_alt-gtex_alt/recount_alt",
+       y="alt count difference")
+
+try2<-try1 %>% filter(quantile_group=="0.5", overlap< 10)%>% mutate(overlap_group=cut_number(overlap,5))
+ggplot(data=try2, aes(x=overlap_group, y=q_alt)) +
   geom_boxplot()+
   labs(title="on average, what's the difference in alt counts",
        subtitle="recount_alt-gtex_alt/recount_alt",
        y="alt count difference")
   
-ggplot(data=try1 %>% filter(quantile_group=="0.5"), aes(x=overlap_group, y=q_total, color=quantile_group)) +
+ggplot(data=try1 %>% filter(quantile_group=="0.5"), aes(x=overlap_group, y=q_total)) +
   geom_boxplot()+
   labs(title="on average, what's the difference in total counts",
        subtitle="recount_total-gtex_total/recount_total",
        y="total count difference")
 dev.off()  
+
