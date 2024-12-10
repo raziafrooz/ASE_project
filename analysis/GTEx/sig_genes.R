@@ -32,6 +32,15 @@ xx<-read.csv("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_p
 gtex_sim<-fread("/dcs07/hansen/data/recount_ASE/data/gtex_simulation.csv.gz")
 gtex_sim_gr<-makeGRangesFromDataFrame(gtex_sim,seqnames="chr",start.field ="start",end.field = "start")
 
+
+qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
+qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
+qc_df$SAMPLE_ID<-str_sub(qc_df$external_id, end= -3)
+
+gtex_w_ov<-qc_df %>% filter(SMGEBTCHT=="TruSeq.v1") %>% 
+  left_join(gtex_uni_norm,by=c("SAMPLE_ID")) %>% 
+  filter(uni_norm_mean<0.08)
+
 #recount_sig_snps<-c()
 #length(unique(xx$study))
 for (k in 22:length(unique(xx$study))){
@@ -52,15 +61,64 @@ sam_id<-xx_one$sample_id_rep[xx_one$sample_id==sam][1]
 
 
 wasp_1_sam<-wasp_1 %>% filter(SAMPLE_ID==sam)
+
 if(nrow(wasp_1_sam)>1){
 
 
-
+if(gtex_w_ov$overlap[gtex_w_ov$SAMPLE_ID==sam] <=0){
 ase_df<-fread(gtex_metadata$genotypedSamples[gtex_metadata$sample_id_rep==sam][1]) %>%
-  filter(pred_genotype==2, coverage>=8) %>% 
+  filter(pred_genotype==2, coverage>=8) %>%
   mutate(ref_ratio=ref_count/coverage,
          alt_count=coverage-ref_count)
-
+}else{
+#=========================================
+  
+  ase_df<-fread(gtex_metadata$genotypedSamples[which(gtex_metadata$sample_id_rep==sam)][1]) %>% 
+    filter(pred_genotype==2, coverage>=8) %>% 
+    mutate(ref_ratio=ref_count/coverage,
+           alt_count=coverage-ref_count,
+           ratio=log2(ref_count/alt_count),
+           mean=(log2(ref_count)+log2(alt_count))/2)
+  
+  
+  
+  ase_df$mean_20tile<-cut(ase_df$mean, seq(0,15,by=0.01),include.lowest =T)
+  
+  
+  zz<-ase_df %>% dplyr::select(chr,start,coverage, ref_count,alt_count, ratio,mean, mean_20tile) %>% 
+    group_by(mean_20tile) %>% reframe(median_ratio=median(ratio),
+                                      mean_ratio=mean(ratio)) %>% 
+    ungroup() %>% 
+    mutate(ratio_adj=round(mean_ratio- 0,3))
+  
+  
+  id<-which(zz$ratio_adj!=0)
+  ase_df$adj_alt<-NA
+  for(kk in 1:length(id)){
+    
+    i<-id[kk]
+    group<-zz$mean_20tile[i]
+    ratio_adj<-zz$ratio_adj[i]
+    
+    indx<-which(ase_df$mean_20tile==group)
+    adj<-ase_df$ratio[indx]-ratio_adj
+    ase_df$adj_alt[indx]<-round(ase_df$coverage[indx]/((2^adj)+1),0)
+  }
+  
+  ase_df$adj_alt[is.na(ase_df$adj_alt)]<-ase_df$alt_count[is.na(ase_df$adj_alt)]
+  
+  #ase_df[,-c("mean_20tile","gtex_median",  "gtex_mean","chr","start")]
+  
+  
+  
+  ase_df$adj_ref<-ase_df$coverage-ase_df$adj_alt
+  
+  
+  
+  ase_df$ref_count<-ase_df$adj_ref
+  ase_df$alt_count<-ase_df$adj_alt
+}
+  #================================
 
 
 # perform multiple testing correction with FDR
@@ -201,11 +259,9 @@ df_x<-data.frame(SAMPLE_ID=sam,
 recount_sig_snps<-rbind(recount_sig_snps,df_x)
 }}
 }
+#fwrite(recount_sig_snps, "~/test/recount_sig_snps2.csv.gz")
 #fwrite(recount_sig_snps, "~/test/recount_sig_snps.csv.gz")
-recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
-qc_df<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/gtex_qc_metadata.csv.gz")
-qc_df<-qc_df %>% mutate(overlap= (star.average_input_read_length)-bc_frag.mode_length)
-
+#recount_sig_snps<-fread("~/test/recount_sig_snps.csv.gz")
 
 #colnames(recount_sig_snps)[1]<-"SAMPLE_ID"
 
@@ -216,7 +272,7 @@ try1<-right_join(qc_df,recount_sig_snps,by=c("SAMPLE_ID"))
 try1 %>% filter(gene_rec>7000) %>%  head(3)
 quantile(try1$gene_rec)
 plot_df<-try1 %>% sample_n(10) %>% 
-  pivot_longer(!c(SAMPLE_ID,overlap), names_to = "pipeline", values_to = "n_sig")
+  pivot_longer(!c(SAMPLE_ID,overlap,study), names_to = "pipeline", values_to = "n_sig")
 
 #pdf(file="~/plot/ASE/significant_snps_wasp.pdf", width = 10, height = 6)
 pdf(file="~/plot/ASE/test.pdf", width = 10, height = 6)
@@ -359,9 +415,30 @@ ggplot(data=try1, aes(x=overlap, y=gene_wasp)) +
 dev.off()
 try1[1,]
 
+plot_df<-try1 %>% 
+  pivot_longer(!c(SAMPLE_ID,overlap,study), names_to = "pipeline", values_to = "n_sig")
 
-quantile(try1$gene_wasp)
+pdf(file="~/plot/ASE/test.pdf", width = 10, height = 6)
 
 
-quantile(try1$sig_gtex)
-try1[try1$sig_gtex==16759.00,]
+plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.05","sig_gtex"))
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, color=pipeline)) +
+  geom_point()+labs(y="# of sig SNPs",title="# of SNPs with fdr<0.05 before intersection")+
+  theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))+ylim(c(0,1000))
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("sig_recount.05_uni", "sig_gtex_uni", "sig_both_uni"))
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, color=pipeline))+ylim(c(0,1000)) +
+  geom_point()+labs(y="# of sig SNPs", title="# of SNPs with fdr<0.05 intersection")+theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("gene_rec","gene_wasp"))
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, color=pipeline)) +ylim(c(0,750))+
+  geom_point()+labs(y="# of sig genes",title="# of sig genes (recount fdr 0.05) before intersection")+ theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+plot_df_1<-plot_df %>% filter(pipeline%in%c("uni_gene_rec","uni_gene_wasp","gene_both"))
+ggplot(data=plot_df_1, aes(x=SAMPLE_ID, y=n_sig, color=pipeline))+ylim(c(0,750)) +
+  geom_point()+labs(y="# of sig genes", title="# of sig genes (recount fdr 0.05) after intersection")+theme(axis.text.x = element_text(angle = 10, vjust = 0.5, hjust=1))
+
+
+dev.off()
