@@ -10,7 +10,7 @@ library(rtracklayer)
 library(cowplot)
 library(MetBrewer)
 
-source("~/ASE/src/uniNorm_function.R")
+source("~/ASE_project/src/uniNorm_function.R")
 
 
 load("/dcs07/hansen/data/recount_ASE/data/vg_ae.rda")
@@ -111,8 +111,8 @@ test<-ase_df %>%
 
 
 tiss <- "MEAN" # The data comes from a skeletal muscle sample
-covered_genes <- intersect(vg_ae$IDs, test$GENE_ID)
-covered_gene_Vgs <- vg_ae[match(covered_genes, vg_ae$IDs), tiss] 
+covered_genes <- intersect(rownames(vg_ae), test$GENE_ID)
+covered_gene_Vgs <- vg_ae[match(covered_genes, rownames(vg_ae)), tiss] 
 covered_gene_ASE_data <- test %>% filter(GENE_ID %in% covered_genes)
 
 # Take the square root of the Vg scores to the get the Standard Deviation (SDg)
@@ -172,8 +172,8 @@ test<-gtex_df %>% dplyr::select(chr,start, GENE_ID,TISSUE_ID,REF_COUNT,ALT_COUNT
 
 
 tiss <- "MEAN" # The data comes from a skeletal muscle sample
-covered_genes <- intersect(vg_ae$IDs, test$GENE_ID)
-covered_gene_Vgs <- vg_ae[match(covered_genes, vg_ae$IDs), tiss] 
+covered_genes <- intersect(rownames(vg_ae), test$GENE_ID)
+covered_gene_Vgs <- vg_ae[match(covered_genes, rownames(vg_ae)), tiss] 
 covered_gene_ASE_data <- test %>% filter(GENE_ID %in% covered_genes)
 
 # Take the square root of the Vg scores to the get the Standard Deviation (SDg)
@@ -222,4 +222,5 @@ fwrite(xx_gtex,"~/ANEVA_gtex_sig.csv")
 
 union<-both[which(both$adj.pval<0.05 & both$adj.pval_recount<0.05)]
 fwrite(union,"~/ANEVA_union_sig.csv")
+
 
