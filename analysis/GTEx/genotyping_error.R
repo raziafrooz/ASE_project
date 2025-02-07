@@ -4,6 +4,7 @@ library(GenomicRanges)
 library(rtracklayer)
 library(AnnotationHub)
 library("org.Hs.eg.db")
+library(VGAM)
 #Downloaded blacklist of snps from gtex (https://github.com/secastel/phaser/blob/master/phaser/README.md)
 HLA_snp<-read.table("/users/arazi/hansen_lab/dwl_files/ASE_filter/hg38_haplo_count_blacklist.chr.bed", sep="\t")
 HLA_snp_gr<-makeGRangesFromDataFrame(HLA_snp,seqnames="V1",start.field ="V2",end.field = "V3")
@@ -38,14 +39,21 @@ colnames(tissues_names)<-"file_name"
 tissues_names$indv<-gsub("\\..*","",tissues_names$file_name)
 tissues_names$file_name<-paste0(path_id, tissues_names$file_name)
 #============================================================
+tissues<-unique(gtex_test$tissue)
 
-gtex_prediction<-fread(gtex_test$genotypedSamples[9])
 
+for(t_id in 4:7){
+  tissue_name<-tissues[t_id]
+  print(tissue_name)
+  
+  if(!file.exists(paste0("~/test/geno_error_",tissue_name,".csv.gz"))){
+   
+gtex_prediction<-fread(gtex_test$genotypedSamples[gtex_test$tissue==tissue_name])
 samples<-unique(gtex_prediction$sample_id_rep)
+rm_id<-which(str_sub(samples, end= -3) %in% bad_samples)
+if(length(rm_id)>0){samples<-samples[-rm_id]}
 
-rm_id<-which(str_sub(samples, end= -3)%in%bad_samples)
-samples<-samples[-rm_id,]
-row_id=2
+print(paste0("number of sample:",length(samples)))
 all_ase<-c()
 for(row_id in 1:length(samples)){
   print(row_id)
@@ -158,33 +166,34 @@ for(row_id in 1:length(samples)){
      
     }
 
-if(!file.exists("~/test/geno_error.csv.gz")){fwrite(all_ase,"~/test/geno_error.csv.gz")}
+fwrite(all_ase,paste0("~/test/geno_error_",tissue_name,".csv.gz"))
+}
+}
+all_ase<-fread("~/test/geno_error.csv.gz")
 
-
-
-
+for(t_id in 4:7){
+  tissue_name<-tissues[t_id]
+  print(tissue_name)
+  
+  ase<-fread(paste0("~/test/geno_error_",tissue_name,".csv.gz"))
+  
+  all_ase<-rbind(all_ase,ase)
+}
 
 pdf(file="~/plot/ASE/geno_error.pdf", width = 10, height = 6)
 ggplot(data=all_ase ,aes(y=log2(adj_alt), x=log2(adj_ref)))+
-  geom_point(alpha=0.2)+
+  geom_scattermore(alpha=0.8,pointsize=2 )+
   geom_abline(slope=1, color="red")+
-  geom_point(data=all_ase %>% filter(true_genotype==1),aes(y=log2(adj_alt), x=log2(adj_ref)),alpha=0.4, color="purple")+
-  geom_point(data=all_ase %>% filter(true_genotype==3),aes(y=log2(adj_alt), x=log2(adj_ref)),alpha=0.4, color="blue")+
-  labs(title="44 samples in Brain_Frontal_Cortex. blue is homo alt, purple is homo ref")
+  geom_scattermore(data=all_ase %>% filter(true_genotype==1),aes(y=log2(adj_alt), x=log2(adj_ref)),aalpha=0.8,pointsize=2, color="purple")+
+  geom_scattermore(data=all_ase %>% filter(true_genotype==3),aes(y=log2(adj_alt), x=log2(adj_ref)),alpha=0.8,pointsize=2, color="blue")+
+  labs(title="233 samples in 4 tissues. blue is homo alt, purple is homo ref")
   
-
-# ggplot(data=all_ase %>% filter(true_genotype==1),aes(y=log2(adj_alt), x=log2(adj_ref)))+
-#   geom_point(alpha=0.4)
-# ggplot(data=all_ase %>% filter(true_genotype==3),aes(y=log2(adj_alt), x=log2(adj_ref)))+
-#   geom_point(alpha=0.4)
-
-ggplot(data=all_ase %>% filter(true_genotype==1),aes(adj_ref/coverage))+
+ggplot(data=all_ase %>% filter(true_genotype==2),aes(adj_ref/coverage))+
   geom_histogram(alpha=0.4)+
-  labs(title="44 samples in Brain_Frontal_Cortex. only showing true homo ref")
+  geom_histogram(data=all_ase %>% filter(true_genotype==1),aes(adj_ref/coverage),fill="purple",alpha=0.4)+
+  geom_histogram(data=all_ase %>% filter(true_genotype==3),aes(adj_ref/coverage),fill="blue",alpha=0.4)+
+  labs(title="233 samples in 4 tissues. gray is true het/purple is true homo ref/ blue is true homo alt")
 
-ggplot(data=all_ase %>% filter(true_genotype==3),aes(adj_ref/coverage))+
-  geom_histogram(alpha=0.4)+
-  labs(title="44 samples in Brain_Frontal_Cortex. only showing true homo alt")
 dev.off()
 
 
@@ -199,7 +208,8 @@ compare_betabinom <- function(coverage,ref_count,rho_val){
 xx<-all_ase %>% filter(true_genotype==3)
 yy<-all_ase %>% filter(true_genotype==1)
 
-library(VGAM)
+
+
 median_ratio=median(yy$adj_ref/yy$coverage)
 rho_seq<-seq(0,0.3,0.01)
 betabinom_result<-data.frame(rho_seq)
@@ -232,12 +242,69 @@ emperical<- yy$adj_ref/yy$coverage
 
 df<-data.frame(experimental,emperical,experimental_binom)
 
-pdf(file="~/plot/ASE/geno_error_test.pdf", width = 10, height = 6)
+pdf(file="~/plot/ASE/geno_error_test2.pdf", width = 10, height = 6)
 
 
 ggplot(data=df ,aes(emperical))+
   geom_histogram(alpha=0.5)+
   geom_freqpoly(data=df,aes(experimental), color="darkgreen")+
-  #geom_freqpoly(data=df,aes(experimental_binom), color="darkred")+
+  geom_freqpoly(data=df,aes(experimental_binom), color="darkred")+
   labs(title="Grey is emperical. Green is beta-binomial (disp=0.07)")
+dev.off()
+
+
+try<-all_ase #%>% group_by(true_genotype) %>% sample_n(5)
+aa<-sapply(1:nrow(try), function(zz)  { pbetabinom((try$adj_ref[zz]), size=try$coverage[zz], prob=0.8276,rho=0) })
+try<- try %>% rowwise() %>% mutate(min_allele=min(adj_alt,adj_ref))
+
+rr<-try[-which(aa>0.3),]
+table(try$true_genotype)
+table(rr$true_genotype)
+
+library(scattermore)
+pdf(file="~/plot/ASE/geno_error_result.pdf", width = 10, height = 6)
+
+ggplot(rr,aes(y=min_allele,x=coverage))+
+  geom_scattermore(pointsize=2)+
+  geom_scattermore(data=try %>% filter(true_genotype==1),aes(y=min_allele,x=coverage), pointsize=2,color="red")+
+  geom_scattermore(data=rr %>% filter(true_genotype==1),aes(y=min_allele,x=coverage), pointsize=2,color="purple")+
+  xlim(c(0,1000))+
+  ylim(c(0,500))+
+  labs(title="233 samples in 4 tissues.purple is true homo ref not removed/ red homo ref removed (geno-error>0.3)")
+
+
+ggplot(rr,aes(y=log2(adj_alt),x=log2(adj_ref)))+
+  geom_scattermore(pointsize=2)+
+  geom_abline(slope=1, color="red")+
+  geom_scattermore(data=rr %>% filter(true_genotype==1),aes(y=log2(adj_alt), x=log2(adj_ref)),pointsize=2, color="purple")+
+  labs(title="233 samples in 4 tissues.purple is true homo ref not removed/ red homo ref removed (geno-error>0.)")
+
+dev.off()
+  
+
+
+#================================
+#ROC curve
+vv=0.1
+try$error_perc<-aa
+rr<-try
+
+roc_df<-data.frame(cut_off=c(0.01,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.5,0.6,0.7,0.8,0.9))
+for(i in 1:nrow(roc_df)){
+  vv<-roc_df$cut_off[i]
+  print(vv)
+rr$rmv<-"no"
+rr$rmv[rr$error_perc>=vv]<-"yes"
+
+
+roc_df$true_pos[i]<-sum(rr$true_genotype==1 & rr$rmv=="yes") /sum(rr$true_genotype==1)
+roc_df$false_pos[i]<-sum(rr$true_genotype==2 & rr$rmv=="yes") /sum(rr$true_genotype==2)
+
+}
+
+pdf(file="~/plot/ASE/geno_error_roc.pdf", width = 10, height = 6)
+ggplot(roc_df, aes(x=false_pos,y=true_pos,group=1,label=cut_off))+
+  geom_line()+
+  geom_point()+geom_text(hjust=0, vjust=0)+
+  labs(title="ROC curve for genotyping error cut-off")
 dev.off()
