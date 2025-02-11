@@ -206,7 +206,7 @@ compare_betabinom <- function(coverage,ref_count,rho_val){
 }
 
 xx<-all_ase %>% filter(true_genotype==3)
-yy<-all_ase %>% filter(true_genotype==1)
+yy<-all_ase %>% filter(true_genotype==1,coverage>20)
 
 
 
@@ -308,3 +308,95 @@ ggplot(roc_df, aes(x=false_pos,y=true_pos,group=1,label=cut_off))+
   geom_point()+geom_text(hjust=0, vjust=0)+
   labs(title="ROC curve for genotyping error cut-off")
 dev.off()
+
+
+#-----------------------------------------------
+all_ase[1:3,]
+pdf(file="~/plot/ASE/geno_error_test3.pdf", width = 10, height = 6)
+ggplot(data=all_ase ,aes(x=log2(adj_ref),y=log2(adj_alt)))+
+  geom_point(alpha=0.3)+
+  facet_wrap(vars(true_genotype))+
+  xlim(c(0,10))+
+  ylim(c(0,10))+
+  geom_smooth()
+dev.off()
+
+
+# bb<-gtex_uni_norm %>% filter(sample_id %in% str_sub(unique(all_ase$sample_id_rep),end= -3)) %>% filter(uni_norm_mean>0.01)
+# rm_id<-which(str_sub(all_ase$sample_id_rep, end= -3) %in% bb$sample_id)
+# all_ase<-all_ase[-rm_id,]
+# gtex_uni_norm[1,]
+# gtex_uni_norm$sample_id[which(gtex_uni_norm$uni_norm_mean>0.08)]
+
+
+cc<-all_ase %>% group_by(sample_id_rep) %>%  summarize(true_1=sum(true_genotype==1)/n())
+pi2<-mean(cc$true_1)
+pi1<-1-pi2
+test<-all_ase %>% group_by(true_genotype) %>% sample_n(20)
+
+get_error_p<-function(ref_count,coverage,pi1,pi2){
+  nom<-(dbinom(ref_count, size = coverage, prob = 0.5)*dbinom((coverage-ref_count), size = coverage, prob = 0.5)*pi1 )
+  err<-(dbinom(ref_count, size = coverage, prob = 0.86)*dbinom((coverage-ref_count), size = coverage, prob = 0.14)*pi2)
+p_val_error<- nom/(nom+err)
+  #(dbinom(ref_count, size = coverage, prob = 0.5)*pi1)/((dbinom(ref_count, size = coverage, prob = 0.5)*pi1 )+(dbinom(ref_count, size = coverage, prob = 0.828)*pi2))
+return(p_val_error)
+}
+
+all_ase$genotyping_conf<-sapply(1:nrow(all_ase), function(zz) get_error_p(all_ase$adj_ref[zz],all_ase$coverage[zz],pi1,pi2))
+
+err[1:3]
+all_ase[1:4,]
+
+pdf(file="~/plot/ASE/test.pdf", width = 10, height = 6)
+ggplot(all_ase %>% filter(genotyping_conf>=0.01), aes(x=log(adj_ref),y=log(adj_alt)))+
+  geom_point()+
+  geom_point(data=all_ase %>% filter(genotyping_conf<0.01), aes(x=log(adj_ref),y=log(adj_alt)),color="red", alpha=0.5)#+
+  #geom_point(data=one_sam %>% filter(true_genotype==1), aes(x=log(adj_ref),y=log(adj_alt)),color="purple", alpha=0.3)
+
+ggplot(all_ase,aes(y=genotyping_conf,x=adj_ref/coverage,color=as.factor(true_genotype)))+
+  geom_point()+
+  facet_wrap(vars(true_genotype))
+dev.off()
+sum(all_ase$genotyping_conf<0.4 & all_ase$true_genotype==1,na.rm=T)
+
+all_ase[1:3,]
+table(all_ase$true_genotype,round(all_ase$genotyping_conf,1))
+all_ase[which(all_ase$genotyping_conf<0.1),][1:4,]
+pdf(file="~/plot/ASE/geno_error_model2.pdf", width = 10, height = 6)
+ggplot(all_ase, aes(x=false_pos,y=true_pos,group=1,label=cut_off))+
+  geom_line()+
+  geom_point()+geom_text(hjust=0, vjust=0)+
+  labs(title="ROC curve for genotyping error cut-off")
+dev.off()
+
+#-------------------------------------------------------
+one_sam<-fread(paste0("~/test/geno_error_",tissue_name,".csv.gz"))
+i=2
+one_sam<-one_sam %>% filter(sample_id_rep==unique(one_sam$sample_id_rep)[i])
+
+one_sam$genotyping_conf<-sapply(1:nrow(one_sam), function(zz) get_error_p(one_sam$adj_ref[zz],one_sam$coverage[zz],pi1,pi2))
+one_sam[1,]
+
+table(one_sam$true_genotype,round(one_sam$genotyping_conf2,1))
+
+pdf(file="~/plot/ASE/test4.pdf", width = 10, height = 6)
+conf=0.000000001
+ggplot(one_sam %>% filter(genotyping_conf>conf), aes(x=log2(adj_ref),y=log2(adj_alt)))+
+  geom_point()+
+  geom_point(data=one_sam %>% filter(genotyping_conf<=conf), aes(x=log2(adj_ref),y=log2(adj_alt)),color="red", alpha=0.5)+
+  geom_point(data=one_sam %>% filter(one_sam$genotyping_conf<=conf,true_genotype==1), aes(x=log2(adj_ref),y=log2(adj_alt)),color="green3", alpha=0.6)+
+  geom_point(data=one_sam %>% filter(one_sam$genotyping_conf>conf,true_genotype==1), aes(x=log2(adj_ref),y=log2(adj_alt)),color="purple", alpha=0.6)+
+  labs(title=paste0(sum(one_sam$genotyping_conf<=conf&one_sam$true_genotype!=1,na.rm=T), " SNPs are het but removed (red)"),
+       subtitle=paste0(unique(one_sam$sample_id_rep),": (green) genotype confidence is <=",conf,". Purple is remaining geno error"))
+
+dev.off()
+
+sum(one_sam$genotyping_conf<=conf&one_sam$true_genotype!=1,na.rm=T)
+one_sam %>% filter(true_genotype==1,coverage>10) %>% summarize(m=median(adj_ref/coverage))
+
+
+yy[1,]
+median(yy$adj_ref/yy$coverage)
+median(yy$adj_alt/yy$coverage)
+table(one_sam$true_genotype,round(one_sam$genotyping_conf,1))
+
