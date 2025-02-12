@@ -31,6 +31,7 @@ for(t_id in 4:12){
   
   if(!file.exists(paste0("~/test/geno_error_",tissue_name,".csv.gz"))){
    
+    
 gtex_prediction<-fread(gtex_test$genotypedSamples[gtex_test$tissue==tissue_name])
 samples<-unique(gtex_prediction$sample_id_rep)
 rm_id<-which(str_sub(samples, end= -3) %in% bad_samples)
