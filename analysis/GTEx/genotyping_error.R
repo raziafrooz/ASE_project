@@ -29,7 +29,7 @@ for(t_id in 4:12){
   tissue_name<-tissues[t_id]
   print(tissue_name)
   
-  if(!file.exists(paste0("~/test/geno_error_",tissue_name,".csv.gz"))){
+  if(!file.exists(paste0(temp_dir,"geno_error_",tissue_name,".csv.gz"))){
    
     
 gtex_prediction<-fread(gtex_test$genotypedSamples[gtex_test$tissue==tissue_name])
@@ -70,7 +70,7 @@ for(row_id in 1:length(samples)){
      
     }
 
-fwrite(all_ase,paste0("~/test/geno_error_",tissue_name,".csv.gz"))
+fwrite(all_ase,paste0(temp_dir,"geno_error_",tissue_name,".csv.gz"))
 }
 }
 
@@ -79,7 +79,7 @@ for(t_id in 4:12){
   tissue_name<-tissues[t_id]
   print(tissue_name)
   
-  ase<-fread(paste0("~/test/geno_error_",tissue_name,".csv.gz"))
+  ase<-fread(paste0(temp_dir,"geno_error_",tissue_name,".csv.gz"))
   
   all_ase<-rbind(all_ase,ase)
 }
@@ -94,7 +94,7 @@ calc_weight<-all_ase %>% group_by(sample_id_rep) %>%  summarize(true_1=sum(true_
 weight2<-median(calc_weight$true_1)
 weight1<-1-weight2
 
-get_error_p<-function(ref_count,coverage,weight1=0.98,weight2=0.02){
+get_error_p<-function(ref_count,coverage,median_ratio=0.86,weight1=0.98,weight2=0.02){
   nom<-(dbinom(ref_count, size = coverage, prob = 0.5)*dbinom((coverage-ref_count), size = coverage, prob = 0.5)*weight1 )
   err<-(dbinom(ref_count, size = coverage, prob = median_ratio)*dbinom((coverage-ref_count), size = coverage, prob =abs( 1-median_ratio))*weight2)
   p_val_error<- nom/(nom+err)
