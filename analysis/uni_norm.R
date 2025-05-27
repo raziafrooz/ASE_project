@@ -2,7 +2,7 @@
 library(quantreg)
 library(data.table)
 library(tidyverse)
-setwd("~/ASE/")
+setwd("~/ASE-data/")
 sra_met<-fread("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/AggregateFiles/all_SRA.csv")
 geu<-sra_met[which(sra_met$study=="ERP001942"),]
 bad_samples<-c("ERR188390","ERR204881","ERR204916","ERR204940",
@@ -10,7 +10,7 @@ bad_samples<-c("ERR188390","ERR204881","ERR204916","ERR204940",
 
 ase_metadata<-read.csv("/dcs07/hansen/data/recount_ASE/metadata/ASE_metadata.csv")
 ase_metadata<-ase_metadata[which(ase_metadata$sample_id %in% geu$sample_id),]
-if(!file.exist("geuvadis_quantile_new.rds")){
+if(!file.exists("geuvadis_quantile_new.rds")){
 #Train based on Geuvadis:
 seq_mean=seq(0,4.6,by=0.1)
 q_line_geu<-c()

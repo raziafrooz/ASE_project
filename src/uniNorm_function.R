@@ -1,3 +1,6 @@
+library(cowplot)
+
+theme_set(theme_cowplot())
 
 make_MA<-function(ase_df,test_line){
    seq_mean=seq(0,4.6,by=0.1)
@@ -41,7 +44,8 @@ plot_MA<-function(ase_df, sample_id,study,uni_norm,test_line_sample,q_line){
     geom_point(alpha=0.4)+
     geom_hline(yintercept = 0, color="black")+
     labs(title= sample_id,
-         subtitle= paste0(study,"-","Old ref_ratio:",round(median(ase_df$ref_ratio),2)))
+         x="A", y="M")
+         #subtitle= paste0(study,"-","Old ref_ratio:",round(median(ase_df$ref_ratio),2)))
   
   p0=p0+
     geom_line(data=test_line_sample[which(test_line_sample$q=="high"),][which(test_line_sample$CI=="high-ci"),], aes(x=max, y=geu_mean, group=1), color="red")+
@@ -55,11 +59,11 @@ plot_MA<-function(ase_df, sample_id,study,uni_norm,test_line_sample,q_line){
   
   
   p1=p0+
-    geom_line(data=q_line[which(q_line$q=="high"),], aes(x=max, y=ratio_q, group=1), color="yellow")+
-    geom_line(data=q_line[which(q_line$q=="low"),], aes(x=max, y=ratio_q, group=1), color="yellow")+
+    geom_line(data=q_line[which(q_line$q=="high"),], aes(x=max, y=ratio_q, group=1), color="magenta2")+
+    geom_line(data=q_line[which(q_line$q=="low"),], aes(x=max, y=ratio_q, group=1), color="magenta2")+
     #geom_line(data=positive_invert, aes(x=max, y=invert, group=1), color="salmon")+
-    geom_line(data=q_line[which(q_line$q=="high"),], aes(x=max, y=median_ratio, group=1), color="green")+
-    annotate("text", x = 4, y = 1.25, label = paste0("uni_norm val:",uni_norm) )
+    geom_line(data=q_line[which(q_line$q=="high"),], aes(x=max, y=median_ratio, group=1), color="lightgreen")+
+    annotate("text", x = 4, y = 1.25, label = paste0("regression_value:",round(uni_norm,2)) )
   #
   return(p1)
   

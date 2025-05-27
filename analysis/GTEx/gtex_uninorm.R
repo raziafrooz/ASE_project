@@ -1,8 +1,8 @@
 library(data.table)
 library(tidyverse)
-source("~/ASE/src/uniNorm_function.R")
+source("~/ASE_project/src/uniNorm_function.R")
 
-test_line<-readRDS("~/ASE/geuvadis_quantile_new.rds")
+test_line<-readRDS("~/ASE-data/geuvadis_quantile_new.rds")
 
 gtex_metadata<-fread("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/AggregateFiles/all_GTEx.csv")
 gtex_metadata$sample_id_rep<-str_sub(gtex_metadata$sample_id, end= -3)
