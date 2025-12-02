@@ -53,7 +53,7 @@ t_id=37
     bigWig_path<-gtex_predict$total[which(gtex_predict$sample_id_rep==sample_id)][1]
     
     
-    ase_df<-remove_problematic_SNPs(ase_df=ase_df,bigWig_path=bigWig_path)
+    ase_df<-remove_problematic_SNPs(ase_df=ase_df)#,bigWig_path=bigWig_path)
     
     #Fix the counts by adjusting the MA plot to mean around 0 
     ratio_adj<-median(ase_df$ratio)
@@ -61,7 +61,7 @@ t_id=37
     ase_df$adj_alt<-round((ase_df$coverage/((2^adj)+1)),0)
     
     stopifnot(sum(is.na(ase_df$adj_alt))==0)
-    all_ase<-ase_df %>% mutate(adj_ref<-coverage-adj_alt)%>%
+    all_ase<-ase_df %>% mutate(adj_ref=coverage-adj_alt)%>%
       dplyr::select(chr, start,adj_alt,adj_ref, coverage,true_genotype,pred_genotype,sample_id_rep)
  
     

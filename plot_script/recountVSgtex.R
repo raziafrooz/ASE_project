@@ -2,7 +2,7 @@
 library(data.table)
 library(ggplot2)
 library(cowplot)
-library(dplyr)
+library(tidyverse)
 theme_set(theme_cowplot())
 theme1= theme(axis.text=element_text(size = 10), axis.title=element_text(size = 20))+
 theme_half_open() +

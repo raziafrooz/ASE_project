@@ -53,7 +53,7 @@ for(row_id in 1:length(samples)){
       bigWig_path<-gtex_predict$total[which(gtex_predict$sample_id_rep==sample_id)][1]
 
       
-      ase_df<-remove_problematic_SNPs(ase_df=ase_df,bigWig_path=bigWig_path)
+      ase_df<-remove_problematic_SNPs(ase_df=ase_df)#,bigWig_path=bigWig_path)
         
       #Fix the counts by adjusting the MA plot to mean around 0 
       ratio_adj<-median(ase_df$ratio)
@@ -127,7 +127,7 @@ vv=0.1
 try$error_perc<-aa
 rr<-all_ase
 
-roc_df<-data.frame(cut_off=c(0.0000000001,0.000000001,0.00000001,0.0000001,0.000001,0.00001,0.0001,0.001))
+roc_df<-data.frame(cut_off=c(0.0000000001,0.000000001,0.00000001,0.0000001,0.000001,0.00001,0.0001,0.001,0.01,0.1))
 for(i in 1:nrow(roc_df)){
   vv<-roc_df$cut_off[i]
   print(vv)
@@ -139,12 +139,18 @@ roc_df$true_pos[i]<-sum(rr$true_genotype==1 & rr$rmv=="yes") /sum(rr$true_genoty
 roc_df$false_pos[i]<-sum(rr$true_genotype==2 & rr$rmv=="yes") /sum(rr$true_genotype==2)
 
 }
+library(cowplot)
 
-pdf(file="~/plot/ASE/geno_error_roc2.pdf", width = 10, height = 6)
+theme_set(theme_cowplot())
+theme1= theme(axis.text=element_text(size = 10), axis.title=element_text(size = 20))+
+  theme_half_open() +
+  background_grid()
+
+pdf(file="~/plot/ASE/geno_error_roc2.pdf", width = 8, height = 4)
 ggplot(roc_df, aes(x=false_pos,y=true_pos,group=1,label=cut_off))+
   geom_line()+
   geom_point()+geom_text(hjust=0, vjust=0)+
-  labs(title="ROC curve for genotyping error cut-off")
+  labs(title="ROC curve for genotyping error cut-off", x= "False positive",y="True positive")+theme1
 dev.off()
 
 #-------------------------------------------------------

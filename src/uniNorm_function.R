@@ -63,7 +63,7 @@ plot_MA<-function(ase_df, sample_id,study,uni_norm,test_line_sample,q_line){
     geom_line(data=q_line[which(q_line$q=="low"),], aes(x=max, y=ratio_q, group=1), color="magenta2")+
     #geom_line(data=positive_invert, aes(x=max, y=invert, group=1), color="salmon")+
     geom_line(data=q_line[which(q_line$q=="high"),], aes(x=max, y=median_ratio, group=1), color="lightgreen")+
-    annotate("text", x = 4, y = 1.25, label = paste0("regression_value:",round(uni_norm,2)) )
+    annotate("text", x = 4, y = 1.25, label = paste0("Distance:",round(uni_norm,2)) )
   #
   return(p1)
   

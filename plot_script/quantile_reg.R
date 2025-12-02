@@ -11,9 +11,9 @@ gtex_uni<-fread(("/dcs07/hansen/data/recount_ASE/data/gtex_uniNorm.csv"))
 gtex_metadata<-fread("/dcs07/hansen/data/recount_genotype/new_count_pipeline/new_count_pipeline/AggregateFiles/all_GTEx.csv")
 gtex_metadata$sample_id_rep<-str_sub(gtex_metadata$sample_id, end= -3)
 
-
+sample="GTEX-S32W-2226-SM-5S2S7"
 plot_list<-list()
-for(sample in c("GTEX-1117F-0226-SM-5GZZ7","K-562-SM-43V9A")){
+for(sample in c("GTEX-1117F-0226-SM-5GZZ7","GTEX-S32W-2226-SM-5S2S7")){#,"K-562-SM-43V9A")){
 k=which(gtex_uni$sample_id==sample)
 
 
@@ -37,7 +37,7 @@ plot_list[[sample]]<-plot_MA(xx$ase_df, sample_id,study,uni_norm,xx$test_line_sa
 }
 
 
-pdf(file="~/plot/ASE/quantile_reg.pdf", width = 10.5, height = 5)
+pdf(file="~/plot/ASE/quantile_reg2.pdf", width = 10.5, height = 5)
 
 plot_grid(plotlist=plot_list,labels = c('A', 'B'),align="hv")
 
